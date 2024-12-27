@@ -59,6 +59,7 @@ dependencies = [
  "obfstr",
  "winapi",
  "windows",
+ "windows-result",
 ]
 
 [[package]]

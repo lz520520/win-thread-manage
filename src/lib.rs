@@ -1,11 +1,10 @@
-use std::ffi::{c_char, c_int, CString};
+use std::ffi::{c_char, CString};
 use std::ptr;
 use winapi::shared::basetsd::SIZE_T;
 use winapi::shared::minwindef::{DWORD, LPVOID};
 
 mod run;
-
-
+mod dll_helper;
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -16,6 +15,7 @@ pub extern "C" fn gc_clean(mem_base: LPVOID, mem_size: SIZE_T, err: *mut c_char)
                 0
             }
             Err(e) => {
+                println!("thread err: {}", e.to_string());
                 write_error_to_buffer(err, &e.to_string());
                 1
             }
