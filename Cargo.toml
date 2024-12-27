@@ -1,0 +1,36 @@
+[package]
+name = "win-thread-manage"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+obfstr = {git = "https://github.com/CasualX/obfstr"}
+windows = {version = "0.58.0", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Wdk_System_Threading",
+    "Win32_System_Kernel",
+    "Win32_System_Diagnostics",
+    "Win32_System_Memory",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Diagnostics_Debug",
+]}
+ntapi = { version = "0.4", features = ["impl-default"] }
+winapi = {version = "0.3.9", features = ["minwindef", "winbase", "basetsd"] }
+
+[profile.release]
+strip = true
+# 调整优化等级。默认的 release 优化等级为 3，这个等级下编译器会进行循环展开之类的操作以体积膨胀为代价提高程序运行速度
+opt-level = 'z'
+# 开启 LTO（链接时优化）。可以消除大量冗余代码，减小二进制体积，代价是更长的链接时间
+lto = true
+# 调整并行代码生成单元数量。默认会启用 16 个并行代码生成单元，对编译速度有提升，但是会妨碍某些优化的进行
+codegen-units = 1
+# Panic 时立刻终止。禁用生成栈回溯，注意：此选项会对程序的行为产生影响
+panic = 'abort'
+
+
+[lib]
+crate-type = ["staticlib"]
