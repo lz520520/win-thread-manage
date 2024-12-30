@@ -4,7 +4,6 @@ use std::os::windows::ffi::OsStrExt;
 use winapi::shared::minwindef::{FARPROC, HMODULE};
 use winapi::um::libloaderapi::{FreeLibrary, GetModuleHandleW, GetProcAddress, LoadLibraryW};
 
-
 pub type CommonResult<T> = Result<T, Box<dyn Error>>;
 pub fn get_wide(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
@@ -64,6 +63,13 @@ impl Drop for DllHelper {
 macro_rules! new_dll {
     ($dll_name:expr) => {{
         crate::dll_helper::DllHelper::new(obfstr::obfstr!($dll_name))
+    }};
+}
+
+#[macro_export]
+macro_rules! new_dll_test {
+    ($dll_name:expr) => {{
+        win_thread_manage::dll_helper::DllHelper::new(obfstr::obfstr!($dll_name))
     }};
 }
 
