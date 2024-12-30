@@ -8,7 +8,7 @@ pub struct MemInfo {
     pub mem_size: usize,
 }
 
-#[derive(Clone,Default)]
+#[derive(Clone,Default,Debug)]
 pub struct AllocInfo {
     pub tid: usize,
     pub alloc_base: usize,
@@ -51,6 +51,16 @@ impl MemAllocator {
     pub fn del_alloc(&self, plugin_address: usize) {
         self.alloc_cache_map.write().unwrap().remove(&plugin_address);
     }
+
+    pub fn del_alloc_value(&self, address: usize) {
+        let mut map = self.alloc_cache_map.write().unwrap();
+        for (_, vec) in map.iter_mut() {
+            if let Some(pos) = vec.iter().position(|info| info.alloc_base == address) {
+                vec.remove(pos); // 删除目标元素
+                break; // 找到后立即停止
+            }
+        }
+    }
     pub fn get_alloc(&self, plugin_address: usize) -> Option<Vec<AllocInfo>> {
         self.alloc_cache_map.read().unwrap().get(&plugin_address).cloned()
     }
@@ -74,4 +84,30 @@ impl MemAllocator {
 }
 lazy_static::lazy_static! {
     pub static ref MEM_ALLOC_CACHE: MemAllocator = MemAllocator::new();
+}
+
+
+#[test]
+fn cache_test() {
+    MEM_ALLOC_CACHE.add_alloc(1234, &AllocInfo{
+        tid: 0,
+        alloc_base: 4567,
+        alloc_size: 0,
+        flallocationtype: Default::default(),
+        flprotect: Default::default(),
+    });
+
+    MEM_ALLOC_CACHE.add_alloc(1234, &AllocInfo{
+        tid: 0,
+        alloc_base: 6789,
+        alloc_size: 0,
+        flallocationtype: Default::default(),
+        flprotect: Default::default(),
+    });
+
+    println!("{:#?}", MEM_ALLOC_CACHE.get_alloc(1234).unwrap());
+
+    MEM_ALLOC_CACHE.del_alloc_value(4567);
+    println!("{:#?}", MEM_ALLOC_CACHE.get_alloc(1234).unwrap());
+
 }

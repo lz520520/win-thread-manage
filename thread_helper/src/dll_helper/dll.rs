@@ -69,7 +69,7 @@ macro_rules! new_dll {
 #[macro_export]
 macro_rules! new_dll_test {
     ($dll_name:expr) => {{
-        win_thread_manage::dll_helper::DllHelper::new(obfstr::obfstr!($dll_name))
+        thread_helper::dll_helper::DllHelper::new(obfstr::obfstr!($dll_name))
     }};
 }
 

@@ -4,9 +4,9 @@ use std::cell::{Cell};
 use std::sync::{Once};
 use std::{ptr};
 use minhook::MinHook;
-use windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::{BOOL, FALSE, HANDLE};
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
-use windows::Win32::System::Memory::{ MEMORY_BASIC_INFORMATION, PAGE_GUARD, PAGE_NOACCESS, PAGE_PROTECTION_FLAGS, PAGE_READWRITE, VIRTUAL_ALLOCATION_TYPE};
+use windows::Win32::System::Memory::{MEMORY_BASIC_INFORMATION, PAGE_GUARD, PAGE_NOACCESS, PAGE_PROTECTION_FLAGS, PAGE_READWRITE, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE};
 use windows::Win32::System::Threading::{GetCurrentThreadId, GetThreadId, LPTHREAD_START_ROUTINE, THREAD_CREATION_FLAGS};
 use crate::alloc::cache::{AllocInfo, MemInfo};
 use crate::dll_helper::CommonResult;
@@ -19,11 +19,21 @@ static mut ORIGINAL_VIRTUAL_ALLOC: Option<unsafe extern "system" fn(
     flprotect: PAGE_PROTECTION_FLAGS,
 ) -> *mut core::ffi::c_void> = None;
 
-static mut ORIGINAL_CREATE_THREAD: Option<unsafe extern "system" fn(lpthreadattributes : *const SECURITY_ATTRIBUTES,
+static mut ORIGINAL_CREATE_THREAD: Option<unsafe extern "system" fn(
+    lpthreadattributes : *const SECURITY_ATTRIBUTES,
     dwstacksize : usize,
     lpstartaddress : LPTHREAD_START_ROUTINE,
     lpparameter : *const core::ffi::c_void,
-    dwcreationflags : THREAD_CREATION_FLAGS, lpthreadid : *mut u32) -> HANDLE> = None;
+    dwcreationflags : THREAD_CREATION_FLAGS,
+    lpthreadid : *mut u32,
+) -> HANDLE> = None;
+
+static mut ORIGINAL_VIRTUAL_FREE: Option<unsafe extern "system" fn(
+    lpaddress : *mut core::ffi::c_void,
+    dwsize : usize,
+    dwfreetype : VIRTUAL_FREE_TYPE
+) -> BOOL> = None;
+
 
 static INIT: Once = Once::new();
 
@@ -31,7 +41,6 @@ thread_local! {
     static IN_MY_VIRTUAL_ALLOC: Cell<bool> = Cell::new(false);
 }
 
-#[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 unsafe extern "system" fn MyVirtualAlloc(
     lpaddress : *const core::ffi::c_void,
@@ -52,8 +61,10 @@ unsafe extern "system" fn MyVirtualAlloc(
     //     if flprotect.0 == 0x445 {
     //         println!("gc plugin");
     //     }
-    //     println!("tid: {tid} lpaddress: {lpaddress:?} dwsize: {dwsize}, flallocationtype: {flallocationtype:?}, flprotect: {flprotect:?}");
+    //     // println!("tid: {tid} lpaddress: {lpaddress:?} dwsize: {dwsize}, flallocationtype: {flallocationtype:?}, flprotect: {flprotect:?}");
     // }
+    // println!("virtual");
+
 
 
 
@@ -121,7 +132,6 @@ unsafe extern "system" fn MyVirtualAlloc(
     memory
 }
 
-#[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 unsafe extern "system" fn MyCreateThread(lpthreadattributes : *const SECURITY_ATTRIBUTES,
                                           dwstacksize : usize,
@@ -170,6 +180,46 @@ unsafe extern "system" fn MyCreateThread(lpthreadattributes : *const SECURITY_AT
 
 
 
+#[allow(non_snake_case, unused_variables)]
+unsafe extern "system" fn MyVirtualFree(
+    lpaddress : *mut core::ffi::c_void,
+    dwsize : usize,
+    dwfreetype : VIRTUAL_FREE_TYPE
+) -> BOOL {
+    let status =  if let Some(original) = ORIGINAL_VIRTUAL_FREE {
+        original(lpaddress, dwsize, dwfreetype)
+    } else {
+        FALSE
+    };
+
+    let mems:  Vec<MemInfo> = cache::MEM_ALLOC_CACHE.all_mem_values();
+    if !mems.is_empty() {
+        match get_current_thread_frames() {
+            Ok(thread_frames) => {
+                for mem in mems {
+                    if thread_frames.stack_frames.iter().any(|frame| {
+                        if *frame >= mem.mem_base && *frame < mem.mem_base + mem.mem_size {
+                            // println!("virtual free");
+                            cache::MEM_ALLOC_CACHE.del_alloc_value(lpaddress as usize);
+                            true
+                        } else {
+                            false
+                        }
+                    }) {
+                        break
+                    }
+                }
+            }
+            Err(err) => {
+                println!("Error getting current thread frames ({:?})", err);
+            }
+        }
+
+    }
+    status
+}
+
+
 pub fn hooks(){
     unsafe {
         // std::thread::sleep(std::time::Duration::from_secs(20));
@@ -191,6 +241,15 @@ pub fn hooks(){
             )
                 .unwrap();
             ORIGINAL_CREATE_THREAD = Some(std::mem::transmute(origin));
+
+            let origin = MinHook::create_hook_api(
+                obfstr::obfstr!("Kernel32.dll"),
+                obfstr::obfstr!("VirtualFree"),
+                MyVirtualFree as _,
+            )
+                .unwrap();
+            ORIGINAL_VIRTUAL_FREE = Some(std::mem::transmute(origin));
+
             let _ = MinHook::enable_all_hooks();
         });
 

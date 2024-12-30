@@ -45,7 +45,11 @@ fn is_valid_address(address: *const std::ffi::c_void,
         if result == 0 {
             return false;
         }
-        mbi.State != MEM_FREE
+        let result = mbi.State == MEM_COMMIT || mbi.State == MEM_RESERVE;
+        if !result {
+            // println!("state: {:?}", mbi.State);
+        }
+        result
     }
 }
 
@@ -415,7 +419,7 @@ pub fn start(mem_base: usize, mem_size: usize) -> CommonResult<()> {
                 if info.tid == 0 {
                     continue;
                 }
-                if is_valid_address(info.alloc_base as *const _, fnVirtualQuery) && all_threads.contains(&info.tid)  {
+                if is_valid_address(info.alloc_base as *const _, fnVirtualQuery) {
                     unsafe {
                         let _ = fnVirtualFree(info.alloc_base as *mut _, 0, MEM_RELEASE);
                     }
