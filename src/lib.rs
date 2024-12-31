@@ -6,8 +6,9 @@ use winapi::shared::minwindef::{DWORD, LPVOID};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub extern "C" fn gc_clean(mem_base: LPVOID, mem_size: SIZE_T, err: *mut c_char) -> DWORD {
+
     unsafe {
-        match thread_helper::thread::start(mem_base as usize, mem_size) {
+        match thread_helper::thread::thread_clean(mem_base as usize, mem_size) {
             Ok(_) => {
                 0
             }
@@ -24,7 +25,7 @@ pub extern "C" fn gc_clean(mem_base: LPVOID, mem_size: SIZE_T, err: *mut c_char)
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub extern "C" fn initialize_hooks(){
-    thread_helper::alloc::hooks();
+    thread_helper::hook::hooks();
 }
 
 

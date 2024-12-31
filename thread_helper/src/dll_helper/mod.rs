@@ -1,4 +1,5 @@
 mod dll;
+mod peb_lookup;
 
 pub use dll::*;
 
