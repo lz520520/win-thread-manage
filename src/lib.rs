@@ -1,7 +1,6 @@
 use std::ffi::{c_char, CString};
 use std::ptr;
-use winapi::shared::basetsd::SIZE_T;
-use winapi::shared::minwindef::{DWORD, LPVOID};
+use thread_helper::dll_helper::windef::*;
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]

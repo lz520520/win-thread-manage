@@ -1,7 +1,6 @@
-#![allow(non_snake_case)]
 
 use std::arch::asm;
-use std::ffi::{c_char, c_short, c_ulong, c_void,  CString};
+use std::ffi::{c_char, c_short, c_ulong, c_void};
 use std::ptr::null_mut;
 use std::{mem, slice};
 use lazy_static::lazy_static;
@@ -12,8 +11,11 @@ use windows::Win32::System::Diagnostics::Debug::{IMAGE_DIRECTORY_ENTRY_EXPORT, I
 use windows::Win32::System::Kernel::LIST_ENTRY;
 use windows::Win32::System::SystemServices::{IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_EXPORT_DIRECTORY};
 const CRC_KERNEL32: u32 =  0x6AE69F02;
+#[allow(non_upper_case_globals)]
 const CRC_GetProcAddress: u32 = 0xC97C1FFF;
+#[allow(non_upper_case_globals)]
 const CRC_LoadLibraryA: u32 = 0x3FC1BD8D;
+#[allow(non_upper_case_globals)]
 const CRC_FreeLibrary: u32 =  0xDA68238F;
 #[allow(non_snake_case)]
 #[derive(Default)]
@@ -122,14 +124,14 @@ pub struct ModuleHandle {
 }
 #[cfg(target_arch = "x86_64")]
 unsafe fn get_peb() -> *mut windows::Win32::System::Threading::PEB {
-    let mut peb: *mut windows::Win32::System::Threading::PEB = std::ptr::null_mut();
+    let mut peb: *mut windows::Win32::System::Threading::PEB = null_mut();
     asm!("mov {}, gs:[0x60]", out(reg) peb);
     peb
 }
 
 #[cfg(target_arch = "x86")]
 unsafe fn get_peb() -> *mut windows::Win32::System::Threading::PEB {
-    let mut peb: *mut windows::Win32::System::Threading::PEB = std::ptr::null_mut();
+    let mut peb: *mut windows::Win32::System::Threading::PEB = null_mut();
     asm!("mov {}, fs:[0x30]", out(reg) peb);
     peb
 }
@@ -341,7 +343,7 @@ pub  fn my_get_proc_address(
 }
 #[test]
 fn get_module_by_checksum_test() {
-    let c =CString::new("ntdll.dll").unwrap();
+    let c = std::ffi::CString::new("ntdll.dll").unwrap();
     unsafe {
         (GLOBAL_IAT.MyLoadLibraryA.unwrap())(PCSTR::from_raw(c.as_ptr() as *const _));
     }

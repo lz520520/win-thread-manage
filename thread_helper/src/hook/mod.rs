@@ -33,6 +33,12 @@ static mut ORIGINAL_VIRTUAL_FREE: Option<unsafe extern "system" fn(
     dwfreetype : VIRTUAL_FREE_TYPE
 ) -> BOOL> = None;
 
+static mut ORIGINAL_VIRTUAL_PROTECT: Option<unsafe extern "system" fn(
+    lpaddress : *mut core::ffi::c_void,
+    dwsize : usize,
+    flnewprotect : PAGE_PROTECTION_FLAGS,
+    lpfloldprotect : *mut PAGE_PROTECTION_FLAGS
+) -> BOOL> = None;
 
 static INIT: Once = Once::new();
 
@@ -117,6 +123,36 @@ unsafe extern "system" fn MyVirtualAlloc(
     }
     IN_MY_VIRTUAL_ALLOC.with(|flag| flag.set(false));
     memory
+}
+
+#[allow(non_snake_case, unused_variables)]
+unsafe extern "system" fn MyVirtualProtect(
+    lpaddress : *mut core::ffi::c_void,
+    dwsize : usize,
+    flnewprotect : PAGE_PROTECTION_FLAGS,
+    lpfloldprotect : *mut PAGE_PROTECTION_FLAGS
+) -> BOOL {
+    let protect = if flnewprotect.0 == 0x445 {
+        PAGE_READWRITE
+    } else {
+        flnewprotect
+    };
+
+    let status =  if let Some(original) = ORIGINAL_VIRTUAL_PROTECT {
+        // std::thread::sleep(std::time::Duration::from_secs(100));
+        original(lpaddress, dwsize, protect, lpfloldprotect)
+    } else {
+        FALSE
+    };
+    if status.as_bool()  && flnewprotect.0 == 0x445 {
+        let alloc_address = lpaddress as usize;
+        alloc::MEM_ALLOC_CACHE.add_mem(alloc_address, &MemInfo{
+            mem_base: alloc_address,
+            mem_size: dwsize,
+        });
+        alloc::MEM_ALLOC_CACHE.add_thread(alloc_address, 0);
+    }
+    status
 }
 
 #[allow(non_snake_case, unused_variables)]
@@ -219,6 +255,15 @@ pub fn hooks(){
                 .unwrap();
 
             ORIGINAL_VIRTUAL_ALLOC = Some(std::mem::transmute(origin));
+
+            let origin = MinHook::create_hook_api(
+                obfstr::obfstr!("Kernel32.dll"),
+                obfstr::obfstr!("VirtualProtect"),
+                MyVirtualProtect as _,
+            )
+                .unwrap();
+
+            ORIGINAL_VIRTUAL_PROTECT = Some(std::mem::transmute(origin));
 
             let origin = MinHook::create_hook_api(
                 obfstr::obfstr!("Kernel32.dll"),

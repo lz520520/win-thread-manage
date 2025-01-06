@@ -1,5 +1,8 @@
+#![allow(dead_code)]
+
 mod dll;
 mod peb_lookup;
+pub mod windef;
 
 pub use dll::*;
 
