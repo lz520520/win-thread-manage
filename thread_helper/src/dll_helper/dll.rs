@@ -12,7 +12,6 @@ pub fn get_wide(s: &str) -> Vec<u16> {
 }
 pub struct DllHelper {
     handle: ModuleHandle,
-    free: bool,
 }
 
 impl DllHelper {
@@ -22,7 +21,7 @@ impl DllHelper {
         if handle.is_none() {
             return Err("handle is invalid".into());
         }
-        Ok(DllHelper{ handle: handle.unwrap(), free: true })
+        Ok(DllHelper{ handle: handle.unwrap() })
     }
     pub fn new_module(dll_name: &str) -> CommonResult<Self> {
         let c_name =  CString::new(dll_name)?;
@@ -30,11 +29,11 @@ impl DllHelper {
         if handle.is_none() {
             return Err("handle is invalid".into());
         }
-        Ok(DllHelper{ handle: handle.unwrap(), free: false })
+        Ok(DllHelper{ handle: handle.unwrap() })
     }
 
     pub fn is_valid(&self) -> bool {
-        !self.handle.handle.is_null() && self.handle.use_load && self.free
+        !self.handle.handle.is_null()
     }
 
     pub fn get_fn(&self, fn_name: &str) -> CommonResult<FARPROC> {
@@ -68,7 +67,7 @@ impl DllHelper {
 
 impl Drop for DllHelper {
     fn drop(&mut self) {
-        if self.is_valid() {
+        if self.is_valid() && self.handle.use_load {
             // println!("{}", obfstr::obfstr!("free"));
             unsafe {
                 let _ =GLOBAL_IAT.MyFreeLibrary.unwrap()(self.handle.handle);
