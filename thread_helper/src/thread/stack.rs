@@ -1,7 +1,7 @@
 use ntapi::ntpsapi::THREAD_BASIC_INFORMATION;
 use windows::Wdk::System::Threading::THREADINFOCLASS;
 use windows::Win32::Foundation::{BOOL, FALSE, HANDLE, NTSTATUS};
-use windows::Win32::System::Diagnostics::Debug::{CONTEXT, CONTEXT_CONTROL_AMD64};
+use windows::Win32::System::Diagnostics::Debug::{CONTEXT};
 use windows::Win32::System::Diagnostics::ToolHelp::{CREATE_TOOLHELP_SNAPSHOT_FLAGS, TH32CS_SNAPTHREAD, THREADENTRY32};
 use windows::Win32::System::Memory::{MEMORY_BASIC_INFORMATION,  PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE};
 use windows::Win32::System::Threading::{PROCESS_ACCESS_RIGHTS, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, THREAD_ACCESS_RIGHTS, THREAD_GET_CONTEXT, THREAD_QUERY_INFORMATION, THREAD_SUSPEND_RESUME};
@@ -103,12 +103,12 @@ pub fn get_current_thread_frames() -> CommonResult<ThreadInfo> {
 
                 #[cfg(any(target_arch = "x86_64"))]
                 {
-                    ctx.ContextFlags = CONTEXT_CONTROL_AMD64;
+                    ctx.ContextFlags = windows::Win32::System::Diagnostics::Debug::CONTEXT_CONTROL_AMD64;
                 }
 
                 #[cfg(target_arch = "x86")]
                 {
-                    ctx.ContextFlags = CONTEXT_CONTROL_X86;
+                    ctx.ContextFlags = windows::Win32::System::Diagnostics::Debug::CONTEXT_CONTROL_X86;
                 }
                 let result = fnGetThreadContext(thread_handle, &mut ctx);
                 result.ok()?;
@@ -256,12 +256,12 @@ pub fn get_threads_of_process(mem_base: usize, mem_size: usize) -> CommonResult<
 
                             #[cfg(any(target_arch = "x86_64"))]
                             {
-                                ctx.ContextFlags = CONTEXT_CONTROL_AMD64;
+                                ctx.ContextFlags = windows::Win32::System::Diagnostics::Debug::CONTEXT_CONTROL_AMD64;
                             }
 
                             #[cfg(target_arch = "x86")]
                             {
-                                ctx.ContextFlags = CONTEXT_CONTROL_X86;
+                                ctx.ContextFlags = windows::Win32::System::Diagnostics::Debug::CONTEXT_CONTROL_X86;
                             }
 
                             fnSuspendThread(thread_handle);

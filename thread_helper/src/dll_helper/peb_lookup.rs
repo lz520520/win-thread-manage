@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use winapi::shared::minwindef::{FARPROC, HMODULE};
 use windows::core::PCSTR;
 use windows::Win32::Foundation::{BOOL,  UNICODE_STRING};
-use windows::Win32::System::Diagnostics::Debug::{IMAGE_DIRECTORY_ENTRY_EXPORT, IMAGE_NT_HEADERS64};
+use windows::Win32::System::Diagnostics::Debug::{IMAGE_DIRECTORY_ENTRY_EXPORT};
 use windows::Win32::System::Kernel::LIST_ENTRY;
 use windows::Win32::System::SystemServices::{IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_EXPORT_DIRECTORY};
 const CRC_KERNEL32: u32 =  0x6AE69F02;
@@ -211,9 +211,9 @@ pub fn my_load_library(library_name: *const u8) -> Option<ModuleHandle> {
 }
 
 #[cfg(target_arch = "x86_64")]
-pub type IMAGE_NT_HEADER = IMAGE_NT_HEADERS64;
+pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS64;
 #[cfg(target_arch = "x86")]
-pub type IMAGE_NT_HEADER = IMAGE_NT_HEADERS32;
+pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS32;
 
 
 pub  fn get_func_by_checksum(
