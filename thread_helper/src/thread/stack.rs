@@ -5,14 +5,6 @@ use crate::{get_dll_fn, new_dll};
 
 
 
-pub struct ModuleInfo {
-    pub name: String,
-    pub path: String,
-    pub module_base: usize,
-    pub code_base: usize,
-    pub code_size: usize,
-}
-
 #[cfg(target_arch = "x86_64")]
 #[allow(non_camel_case_types)]
 pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS64;
@@ -30,7 +22,7 @@ pub struct FrameInfo {
 
 #[allow(non_snake_case)]
 pub unsafe fn stackback(max_frames: usize) -> CommonResult<Vec<FrameInfo>>{
-    let module_infos = crate::thread::module::get_all_module_info()?;
+    // let module_infos = crate::thread::module::get_all_module_info()?;
 
 
     let mut frames: Vec<*mut c_void> = vec![std::ptr::null_mut(); max_frames];
@@ -53,12 +45,12 @@ pub unsafe fn stackback(max_frames: usize) -> CommonResult<Vec<FrameInfo>>{
         let mut info = FrameInfo::default();
         info.addr = frame;
 
-        if let Some(module_info) = module_infos.iter().find(|x| {
-            frame >= x.code_base && frame <= x.code_base + x.code_size
-        }) {
-            info.module_name = module_info.name.clone();
-            info.offset = frame - module_info.module_base;
-        }
+        // if let Some(module_info) = module_infos.iter().find(|x| {
+        //     frame >= x.code_base && frame <= x.code_base + x.code_size
+        // }) {
+        //     info.module_name = module_info.name.clone();
+        //     info.offset = frame - module_info.module_base;
+        // }
         frame_infos.push(info);
     }
 
