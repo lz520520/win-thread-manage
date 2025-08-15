@@ -1,7 +1,9 @@
 pub mod stack;
+pub mod module;
 
 use std::collections::HashSet;
-use windows::Win32::Foundation::{BOOL, FALSE, HANDLE};
+use windows::core::BOOL;
+use windows::Win32::Foundation::{FALSE, HANDLE};
 use windows::Win32::System::Memory::{ MEMORY_BASIC_INFORMATION, MEM_COMMIT,  MEM_RELEASE, MEM_RESERVE, VIRTUAL_FREE_TYPE};
 use windows::Win32::System::Threading::{ THREAD_ACCESS_RIGHTS, THREAD_QUERY_INFORMATION, THREAD_SUSPEND_RESUME, THREAD_TERMINATE};
 use crate::{get_dll_fn, new_dll};

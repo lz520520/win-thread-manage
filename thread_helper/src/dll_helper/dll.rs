@@ -3,7 +3,7 @@ use std::ffi::{CString, OsStr};
 use std::os::windows::ffi::OsStrExt;
 use winapi::shared::minwindef::FARPROC;
 use winapi::um::libloaderapi::{ GetProcAddress};
-use windows::core::PCSTR;
+
 use crate::dll_helper::peb_lookup::{my_get_proc_address, my_load_library, ModuleHandle, GLOBAL_IAT};
 
 pub type CommonResult<T> = Result<T, Box<dyn Error>>;

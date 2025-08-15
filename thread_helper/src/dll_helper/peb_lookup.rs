@@ -1,15 +1,16 @@
 
 use std::arch::asm;
-use std::ffi::{c_char, c_short, c_ulong, c_void};
+use std::ffi::{c_short, c_ulong, c_void};
 use std::ptr::null_mut;
 use std::{mem, slice};
 use lazy_static::lazy_static;
 use winapi::shared::minwindef::{FARPROC, HMODULE};
-use windows::core::PCSTR;
-use windows::Win32::Foundation::{BOOL,  UNICODE_STRING};
+use windows::core::{BOOL, PCSTR};
+use windows::Win32::Foundation::{  UNICODE_STRING};
 use windows::Win32::System::Diagnostics::Debug::{IMAGE_DIRECTORY_ENTRY_EXPORT};
 use windows::Win32::System::Kernel::LIST_ENTRY;
 use windows::Win32::System::SystemServices::{IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_EXPORT_DIRECTORY};
+
 const CRC_KERNEL32: u32 =  0x6AE69F02;
 #[allow(non_upper_case_globals)]
 const CRC_GetProcAddress: u32 = 0xC97C1FFF;
@@ -80,11 +81,7 @@ where
 }
 
 
-fn c_to_rust_string(c_str: *const c_char) -> String{
-    unsafe {
-        std::ffi::CStr::from_ptr(c_str).to_string_lossy().into_owned()
-    }
-}
+
 fn memory_copy(destination_ptr: *mut u8, source_ptr: *const u8, number_of_bytes: usize) {
     unsafe {
         for index in 0..number_of_bytes {

@@ -3,13 +3,14 @@ use std::cell::{Cell};
 use std::sync::{Once};
 use std::{ptr};
 use minhook::MinHook;
-use windows::Win32::Foundation::{BOOL, FALSE, HANDLE};
+use windows::core::BOOL;
+use windows::Win32::Foundation::{FALSE, HANDLE};
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 use windows::Win32::System::Memory::{PAGE_PROTECTION_FLAGS, PAGE_READWRITE, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE};
 use windows::Win32::System::Threading::{GetCurrentThreadId, GetThreadId, LPTHREAD_START_ROUTINE, THREAD_CREATION_FLAGS};
 use crate::alloc;
 use crate::alloc::{AllocInfo, MemInfo};
-use crate::thread::stack::get_current_thread_frames;
+use crate::thread::stack::{stackback};
 
 static mut ORIGINAL_VIRTUAL_ALLOC: Option<unsafe extern "system" fn(
     lpaddress: *const core::ffi::c_void,
@@ -96,10 +97,11 @@ unsafe extern "system" fn MyVirtualAlloc(
         } else {
             let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
             if !mems.is_empty() {
-                if let Ok(thread_frames)  = get_current_thread_frames() {
+                if let Ok(frames) = stackback(64) {
                     for mem in mems {
-                        if thread_frames.stack_frames.iter().any(|frame| {
-                            if *frame >= mem.mem_base && *frame < mem.mem_base + mem.mem_size {
+
+                        if frames.iter().any(|frame| {
+                            if frame.addr >= mem.mem_base && frame.addr < mem.mem_base + mem.mem_size {
                                 alloc::MEM_ALLOC_CACHE.add_alloc(mem.mem_base, &AllocInfo{
                                     tid: tid as usize,
                                     alloc_base: alloc_address,
@@ -115,8 +117,6 @@ unsafe extern "system" fn MyVirtualAlloc(
                             break
                         }
                     }
-                } else {
-                    println!("virtual alloc thread no memory");
                 }
             }
         }
@@ -170,12 +170,12 @@ unsafe extern "system" fn MyCreateThread(lpthreadattributes : *const SECURITY_AT
     if !handle.is_invalid() {
         let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
         if !mems.is_empty() {
-            match get_current_thread_frames() {
+            match stackback(64) {
                 Ok(thread_frames) => {
 
                     for mem in mems {
-                        if thread_frames.stack_frames.iter().any(|frame| {
-                            if *frame >= mem.mem_base && *frame < mem.mem_base + mem.mem_size {
+                        if thread_frames.iter().any(|frame| {
+                            if frame.addr >= mem.mem_base && frame.addr < mem.mem_base + mem.mem_size {
                                 let tid = GetThreadId(handle);
                                 // println!("create thread: {}", tid);
 
@@ -217,11 +217,11 @@ unsafe extern "system" fn MyVirtualFree(
 
     let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
     if !mems.is_empty() {
-        match get_current_thread_frames() {
+        match stackback(64) {
             Ok(thread_frames) => {
                 for mem in mems {
-                    if thread_frames.stack_frames.iter().any(|frame| {
-                        if *frame >= mem.mem_base && *frame < mem.mem_base + mem.mem_size {
+                    if thread_frames.iter().any(|frame| {
+                        if frame.addr >= mem.mem_base && frame.addr < mem.mem_base + mem.mem_size {
                             alloc::MEM_ALLOC_CACHE.del_alloc_value(lpaddress as usize);
                             true
                         } else {
