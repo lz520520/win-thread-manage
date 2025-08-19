@@ -3,6 +3,7 @@
 mod dll;
 mod peb_lookup;
 pub mod windef;
+pub mod thread;
 
 pub use dll::*;
 

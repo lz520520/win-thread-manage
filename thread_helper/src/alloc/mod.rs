@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,  RwLock};
+use once_cell::sync::Lazy;
 use windows::Win32::System::Memory::{PAGE_PROTECTION_FLAGS, VIRTUAL_ALLOCATION_TYPE};
 
 #[derive(Clone, Default, Debug)]
@@ -82,9 +83,9 @@ impl MemAllocator {
         self.thread_cache_map.read().unwrap().get(&plugin_address).cloned()
     }
 }
-lazy_static::lazy_static! {
-    pub static ref MEM_ALLOC_CACHE: MemAllocator = MemAllocator::new();
-}
+
+
+pub static  MEM_ALLOC_CACHE: Lazy<MemAllocator> = Lazy::new(|| MemAllocator::new());
 
 
 #[test]

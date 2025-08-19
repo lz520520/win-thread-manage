@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::ffi::{CString, OsStr};
 use std::os::windows::ffi::OsStrExt;
-use winapi::shared::minwindef::FARPROC;
+use winapi::shared::minwindef::{FARPROC, HMODULE};
 use winapi::um::libloaderapi::{ GetProcAddress};
 
 use crate::dll_helper::peb_lookup::{my_get_proc_address, my_load_library, ModuleHandle, GLOBAL_IAT};
@@ -17,19 +17,22 @@ pub struct DllHelper {
 impl DllHelper {
     pub fn new(dll_name: &str) -> CommonResult<Self> {
         let c_name =  CString::new(dll_name)?;
-        let handle = my_load_library(c_name.as_ptr() as *const _);
+        let handle = my_load_library(c_name.as_ptr() as *const _, true);
         if handle.is_none() {
-            return Err("handle is invalid".into());
+            return Err(obfstr::obfstr!("handle is invalid").into());
         }
         Ok(DllHelper{ handle: handle.unwrap() })
     }
     pub fn new_module(dll_name: &str) -> CommonResult<Self> {
         let c_name =  CString::new(dll_name)?;
-        let handle = my_load_library(c_name.as_ptr() as *const _);
+        let handle = my_load_library(c_name.as_ptr() as *const _, false);
         if handle.is_none() {
-            return Err("handle is invalid".into());
+            return Err(obfstr::obfstr!("handle is invalid").into());
         }
         Ok(DllHelper{ handle: handle.unwrap() })
+    }
+    pub fn get_handle(&self) -> HMODULE {
+        self.handle.handle
     }
 
     pub fn is_valid(&self) -> bool {
@@ -41,7 +44,7 @@ impl DllHelper {
         let func = unsafe {GetProcAddress(self.handle.handle, c_str.as_ptr() as _)};
         // println!("name: {} addr: {:?}",fn_name, func);
         if func.is_null() {
-            Err(format!("func {} is invalid", fn_name).into())
+            Err(format!("{} {} {}",obfstr::obfstr!("func"),  fn_name, obfstr::obfstr!("is invalid")).into())
         } else {
             Ok(func)
         }
@@ -56,7 +59,7 @@ impl DllHelper {
         // println!("name: {} addr: {:?}",fn_name, func);
 
         if func.is_null() {
-            Err(format!("func {} is invalid", fn_name).into())
+            Err(format!("{} {} {}",obfstr::obfstr!("func"),  fn_name, obfstr::obfstr!("is invalid")).into())
         } else {
             Ok(func)
         }

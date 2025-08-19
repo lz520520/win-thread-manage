@@ -12,12 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazy_static"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
 name = "log"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -25,9 +19,9 @@ checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
 name = "minhook"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a48ae87876aaa4622bad562f6565cc1961ab8a3394e45247211f20f110286b5e"
+checksum = "b2f2f08fd0c84a0779eda4d47ec1457fdc4ad470bf62605f9c4b16f8cd87b093"
 dependencies = [
  "cc",
  "tracing",
@@ -49,9 +43,9 @@ source = "git+https://github.com/CasualX/obfstr#e581c85f2290433a381278c44e7915b9
 
 [[package]]
 name = "once_cell"
-version = "1.20.2"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "pin-project-lite"
@@ -107,7 +101,6 @@ dependencies = [
 name = "thread_helper"
 version = "0.1.0"
 dependencies = [
- "lazy_static",
  "minhook",
  "ntapi",
  "obfstr",

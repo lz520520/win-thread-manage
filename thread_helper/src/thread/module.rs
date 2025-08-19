@@ -3,8 +3,9 @@ use windows::Win32::Foundation::{HANDLE};
 use windows::Win32::System::Diagnostics::Debug::{IMAGE_SCN_MEM_EXECUTE, IMAGE_SECTION_HEADER};
 use windows::Win32::System::Diagnostics::ToolHelp::{CREATE_TOOLHELP_SNAPSHOT_FLAGS, MODULEENTRY32, TH32CS_SNAPMODULE};
 use windows::Win32::System::SystemServices::{IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE};
-use crate::dll_helper::{c_to_rust_string_form_bytes, CommonResult};
+use crate::dll_helper::{c_to_rust_string_form_bytes, CommonResult, DllHelper};
 use crate::{get_dll_fn, new_dll};
+use crate::alloc::MemInfo;
 
 pub struct ModuleInfo {
     pub name: String,
@@ -20,6 +21,33 @@ pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_
 #[cfg(target_arch = "x86")]
 #[allow(non_camel_case_types)]
 pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS32;
+
+
+pub fn get_memory(module: &str) -> CommonResult<MemInfo>{
+    unsafe {
+        let handle = DllHelper::new_module(module)?;
+        let handle = handle.get_handle();
+
+        let module_base = handle as usize;
+        let dos_header = module_base as *const IMAGE_DOS_HEADER;
+        if (*dos_header).e_magic != IMAGE_DOS_SIGNATURE {
+            return Err(obfstr::obfstr!("IMAGE_DOS_SIGNATURE not found").into());
+        }
+        let nt_headers = (module_base + (*dos_header).e_lfanew as usize) as *const IMAGE_NT_HEADER;
+        let section_headers = (module_base + (*dos_header).e_lfanew as usize + std::mem::size_of::<IMAGE_NT_HEADER>()) as *const IMAGE_SECTION_HEADER;
+        for i in 0..(*nt_headers).FileHeader.NumberOfSections {
+            let section_header  = section_headers.add(i as usize);
+            if (*section_header).VirtualAddress > 0 {
+                if (*section_header).Characteristics.0 & IMAGE_SCN_MEM_EXECUTE.0 > 0 {
+                    let start = module_base + (*section_header).VirtualAddress as usize;
+                    let length =(*section_header).Misc.VirtualSize as usize;
+                    return Ok(MemInfo{mem_base: start, mem_size: length});
+                }
+            }
+        }
+    }
+    Err(obfstr::obfstr!("not found").into())
+}
 
 #[allow(non_snake_case)]
 pub fn get_all_module_info() -> CommonResult<Vec<ModuleInfo>> {

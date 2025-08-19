@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 winapi = {version = "0.3.9", features = ["minwindef", "winbase", "basetsd","libloaderapi"] }
-minhook = "0.5.0"
+minhook = "0.6.0"
 thread_helper = {path = "../thread_helper"}
 
 [lib]

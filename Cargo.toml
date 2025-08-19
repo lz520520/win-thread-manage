@@ -18,7 +18,7 @@ windows = {version = "0.61.3", features = [
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_Diagnostics_Debug",
 ]}
-minhook = "0.5.0"
+minhook = "0.6.0"
 thread_helper = {path = "thread_helper"}
 
 [profile.release]

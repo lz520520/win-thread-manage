@@ -1,4 +1,3 @@
-use std::ptr;
 use std::ptr::null_mut;
 use minhook::{MinHook, MH_STATUS};
 use windows::Win32::Foundation::HANDLE;

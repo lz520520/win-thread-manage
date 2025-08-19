@@ -1,8 +1,10 @@
 
 use std::cell::{Cell};
-use std::sync::{Once};
-use std::{ptr};
+use std::sync::{Mutex, Once};
+use std::{mem, ptr};
 use minhook::MinHook;
+use once_cell::sync::Lazy;
+use winapi::shared::minwindef::UINT;
 use windows::core::BOOL;
 use windows::Win32::Foundation::{FALSE, HANDLE};
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
@@ -10,38 +12,45 @@ use windows::Win32::System::Memory::{PAGE_PROTECTION_FLAGS, PAGE_READWRITE, VIRT
 use windows::Win32::System::Threading::{GetCurrentThreadId, GetThreadId, LPTHREAD_START_ROUTINE, THREAD_CREATION_FLAGS};
 use crate::alloc;
 use crate::alloc::{AllocInfo, MemInfo};
+use crate::thread::module::get_memory;
 use crate::thread::stack::{stackback};
 
-static mut ORIGINAL_VIRTUAL_ALLOC: Option<unsafe extern "system" fn(
+
+static  ORIGINAL_VIRTUAL_ALLOC: Lazy<Mutex<Option<unsafe extern "system" fn(
     lpaddress: *const core::ffi::c_void,
     dwsize: usize,
     flallocationtype: VIRTUAL_ALLOCATION_TYPE,
     flprotect: PAGE_PROTECTION_FLAGS,
-) -> *mut core::ffi::c_void> = None;
+) -> *mut core::ffi::c_void>>> = Lazy::new(|| Mutex::new(None));
 
-static mut ORIGINAL_CREATE_THREAD: Option<unsafe extern "system" fn(
+
+static  ORIGINAL_FREE_CONSOLE: Lazy<Mutex<Option<unsafe extern "system" fn() -> BOOL>>> = Lazy::new(|| Mutex::new(None));
+
+static  ORIGINAL_CREATE_THREAD: Lazy<Mutex<Option<unsafe extern "system" fn(
     lpthreadattributes : *const SECURITY_ATTRIBUTES,
     dwstacksize : usize,
     lpstartaddress : LPTHREAD_START_ROUTINE,
     lpparameter : *const core::ffi::c_void,
     dwcreationflags : THREAD_CREATION_FLAGS,
     lpthreadid : *mut u32,
-) -> HANDLE> = None;
+) -> HANDLE>>> = Lazy::new(|| Mutex::new(None));
 
-static mut ORIGINAL_VIRTUAL_FREE: Option<unsafe extern "system" fn(
+static  ORIGINAL_VIRTUAL_FREE: Lazy<Mutex<Option<unsafe extern "system" fn(
     lpaddress : *mut core::ffi::c_void,
     dwsize : usize,
     dwfreetype : VIRTUAL_FREE_TYPE
-) -> BOOL> = None;
+) -> BOOL>>> = Lazy::new(|| Mutex::new(None));
 
-static mut ORIGINAL_VIRTUAL_PROTECT: Option<unsafe extern "system" fn(
+
+static  ORIGINAL_VIRTUAL_PROTECT: Lazy<Mutex<Option<unsafe extern "system" fn(
     lpaddress : *mut core::ffi::c_void,
     dwsize : usize,
     flnewprotect : PAGE_PROTECTION_FLAGS,
     lpfloldprotect : *mut PAGE_PROTECTION_FLAGS
-) -> BOOL> = None;
+) -> BOOL>>> = Lazy::new(|| Mutex::new(None));
 
-static INIT: Once = Once::new();
+
+static MODULE_BLACKLIST: Lazy<Mutex<Vec<String>>> = Lazy::new(|| {Mutex::new(Vec::new())});
 
 thread_local! {
     static IN_MY_VIRTUAL_ALLOC: Cell<bool> = Cell::new(false);
@@ -79,8 +88,8 @@ unsafe extern "system" fn MyVirtualAlloc(
     } else {
         flprotect
     };
-
-    let memory =  if let Some(original) = ORIGINAL_VIRTUAL_ALLOC {
+    let origin = ORIGINAL_VIRTUAL_ALLOC.lock().unwrap().clone();
+    let memory =  if let Some(original) = origin {
         // std::thread::sleep(std::time::Duration::from_secs(100));
         original(lpaddress, dwsize, flallocationtype, protect)
     } else {
@@ -137,8 +146,8 @@ unsafe extern "system" fn MyVirtualProtect(
     } else {
         flnewprotect
     };
-
-    let status =  if let Some(original) = ORIGINAL_VIRTUAL_PROTECT {
+    let origin = ORIGINAL_VIRTUAL_PROTECT.lock().unwrap().clone();
+    let status =  if let Some(original) = origin {
         // std::thread::sleep(std::time::Duration::from_secs(100));
         original(lpaddress, dwsize, protect, lpfloldprotect)
     } else {
@@ -156,12 +165,34 @@ unsafe extern "system" fn MyVirtualProtect(
 }
 
 #[allow(non_snake_case, unused_variables)]
+unsafe extern "system" fn MyFreeConsole() -> BOOL {
+    let origin = ORIGINAL_FREE_CONSOLE.lock().unwrap().clone();
+    let status =  if let Some(original) = origin {
+        // std::thread::sleep(std::time::Duration::from_secs(100));
+        original()
+    } else {
+        FALSE
+    };
+    status
+}
+
+#[allow(non_snake_case, unused_variables)]
 unsafe extern "system" fn MyCreateThread(lpthreadattributes : *const SECURITY_ATTRIBUTES,
                                          dwstacksize : usize,
                                          lpstartaddress : LPTHREAD_START_ROUTINE,
                                          lpparameter : *const core::ffi::c_void,
                                          dwcreationflags : THREAD_CREATION_FLAGS, lpthreadid : *mut u32) -> HANDLE {
-    let handle =  if let Some(original) = ORIGINAL_CREATE_THREAD {
+    let module_blacklist = {MODULE_BLACKLIST.lock().unwrap().clone()};
+    for module in module_blacklist.iter() {
+        if let Ok(mem) = get_memory(&module) {
+            let addr: usize =  std::mem::transmute(lpstartaddress);
+            if addr >= mem.mem_base && addr <= mem.mem_base + mem.mem_size {
+                return HANDLE::default()
+            }
+        }
+    }
+    let origin = ORIGINAL_CREATE_THREAD.lock().unwrap().clone();
+    let handle =  if let Some(original) = origin {
         original(lpthreadattributes, dwstacksize, lpstartaddress, lpparameter, dwcreationflags, lpthreadid)
     } else {
         HANDLE::default()
@@ -209,7 +240,8 @@ unsafe extern "system" fn MyVirtualFree(
     dwsize : usize,
     dwfreetype : VIRTUAL_FREE_TYPE
 ) -> BOOL {
-    let status =  if let Some(original) = ORIGINAL_VIRTUAL_FREE {
+    let origin = ORIGINAL_VIRTUAL_FREE.lock().unwrap().clone();
+    let status =  if let Some(original) = origin {
         original(lpaddress, dwsize, dwfreetype)
     } else {
         FALSE
@@ -240,49 +272,94 @@ unsafe extern "system" fn MyVirtualFree(
     }
     status
 }
+#[allow(non_snake_case, unused_variables)]
+extern "stdcall" fn MyExitProcess(uExitCode: UINT) {
+    // println!("hook exit");
+    std::thread::sleep(std::time::Duration::from_secs(60 * 60 * 24 * 365  ));
 
+}
+
+
+pub fn set_module_blacklist(list: Vec<String>) {
+    *MODULE_BLACKLIST.lock().unwrap() = list;
+
+}
+
+fn is_hook(code: &[u8]) -> bool {
+    code.starts_with(&[0xE8]) ||
+        code.starts_with(&[0xE9]) ||
+        (code[0] == 0x0F && (code[1] & 0xF0) == 0x80) ||
+        code.starts_with(&[0xFF,0x15,0x00,0x00,0x00,0x02]) ||
+        code.starts_with(&[0xFF,0x25,0x00,0x00,0x00,0x00])||
+        (code[0] & 0xF0 == 0x70 && code[1..].starts_with(&[0x0E,0xFF,0x25]))
+}
 
 pub fn hooks(){
     unsafe {
-        // std::thread::sleep(std::time::Duration::from_secs(20));
-        // println!("Initializing...");
-        INIT.call_once(|| {
-            let origin = MinHook::create_hook_api(
-                obfstr::obfstr!("Kernel32.dll"),
-                obfstr::obfstr!("VirtualAlloc"),
-                MyVirtualAlloc as _,
-            )
-                .unwrap();
+        let dll = crate::dll_helper::DllHelper::new_module(obfstr::obfstr!("kernel32.dll")).unwrap();
 
-            ORIGINAL_VIRTUAL_ALLOC = Some(std::mem::transmute(origin));
+        let proc = dll.get_fn(obfstr::obfstr!("FreeConsole")).unwrap();
+        let mem_start: [u8; 6] = std::ptr::read(proc as *const [u8; 6]);
+        if is_hook(&mem_start) {
+            return;
+        }
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("FreeConsole"),
+            MyFreeConsole as _,
+        )
+            .unwrap();
+        *ORIGINAL_FREE_CONSOLE.lock().unwrap() = Some(std::mem::transmute(origin));
 
-            let origin = MinHook::create_hook_api(
-                obfstr::obfstr!("Kernel32.dll"),
-                obfstr::obfstr!("VirtualProtect"),
-                MyVirtualProtect as _,
-            )
-                .unwrap();
 
-            ORIGINAL_VIRTUAL_PROTECT = Some(std::mem::transmute(origin));
+        let proc = dll.get_fn(obfstr::obfstr!("VirtualAlloc")).unwrap();
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("VirtualAlloc"),
+            MyVirtualAlloc as _,
+        )
+            .unwrap();
+        *ORIGINAL_VIRTUAL_ALLOC.lock().unwrap() = Some(std::mem::transmute(origin));
 
-            let origin = MinHook::create_hook_api(
-                obfstr::obfstr!("Kernel32.dll"),
-                obfstr::obfstr!("CreateThread"),
-                MyCreateThread as _,
-            )
-                .unwrap();
-            ORIGINAL_CREATE_THREAD = Some(std::mem::transmute(origin));
+        let proc = dll.get_fn(obfstr::obfstr!("VirtualProtect")).unwrap();
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("VirtualProtect"),
+            MyVirtualProtect as _,
+        )
+            .unwrap();
+        *ORIGINAL_VIRTUAL_PROTECT.lock().unwrap() = Some(std::mem::transmute(origin));
 
-            let origin = MinHook::create_hook_api(
-                obfstr::obfstr!("Kernel32.dll"),
-                obfstr::obfstr!("VirtualFree"),
-                MyVirtualFree as _,
-            )
-                .unwrap();
-            ORIGINAL_VIRTUAL_FREE = Some(std::mem::transmute(origin));
+        let proc = dll.get_fn(obfstr::obfstr!("CreateThread")).unwrap();
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("CreateThread"),
+            MyCreateThread as _,
+        )
+            .unwrap();
+        *ORIGINAL_CREATE_THREAD.lock().unwrap() = Some(std::mem::transmute(origin));
 
-            let _ = MinHook::enable_all_hooks();
-        });
+        let proc = dll.get_fn(obfstr::obfstr!("VirtualFree")).unwrap();
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("VirtualFree"),
+            MyVirtualFree as _,
+        )
+            .unwrap();
+        *ORIGINAL_VIRTUAL_FREE.lock().unwrap() = Some(std::mem::transmute(origin));
 
+        let proc = dll.get_fn(obfstr::obfstr!("ExitProcess")).unwrap();
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let _origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("ExitProcess"),
+            MyExitProcess as _).unwrap();
+
+        let _ = MinHook::enable_all_hooks();
     }
 }

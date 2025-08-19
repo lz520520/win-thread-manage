@@ -27,6 +27,10 @@ pub extern "C" fn initialize_hooks(){
     thread_helper::hook::hooks();
 }
 
+pub fn set_module_blacklist(list: Vec<String>) {
+    thread_helper::hook::set_module_blacklist(list);
+}
+
 
 /// 将错误信息写入调用方提供的 `err` 缓冲区
 unsafe fn write_error_to_buffer(err: *mut c_char, message: &str) {

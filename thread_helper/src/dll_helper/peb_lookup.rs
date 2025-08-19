@@ -3,7 +3,7 @@ use std::arch::asm;
 use std::ffi::{c_short, c_ulong, c_void};
 use std::ptr::null_mut;
 use std::{mem, slice};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use winapi::shared::minwindef::{FARPROC, HMODULE};
 use windows::core::{BOOL, PCSTR};
 use windows::Win32::Foundation::{  UNICODE_STRING};
@@ -27,21 +27,16 @@ pub struct  MiniIAT {
 
 }
 
-lazy_static! {
-    pub static ref GLOBAL_IAT: MiniIAT = {
-        unsafe {
-            let base = get_module_by_checksum(CRC_KERNEL32).unwrap();
-            let mut iat = MiniIAT::default();
-            iat.MyLoadLibraryA = std::mem::transmute(get_func_by_checksum( base, CRC_LoadLibraryA));
-            iat.MyGetProcAddress = std::mem::transmute(get_func_by_checksum(base, CRC_GetProcAddress));
-            iat.MyFreeLibrary = std::mem::transmute(get_func_by_checksum(base, CRC_FreeLibrary));
-            iat
-        }
-
-
-    };
-}
-
+pub static GLOBAL_IAT: Lazy<MiniIAT> = Lazy::new(|| {
+    unsafe {
+        let base = get_module_by_checksum(CRC_KERNEL32).unwrap();
+        let mut iat = MiniIAT::default();
+        iat.MyLoadLibraryA = std::mem::transmute(get_func_by_checksum( base, CRC_LoadLibraryA));
+        iat.MyGetProcAddress = std::mem::transmute(get_func_by_checksum(base, CRC_GetProcAddress));
+        iat.MyFreeLibrary = std::mem::transmute(get_func_by_checksum(base, CRC_FreeLibrary));
+        iat
+    }
+});
 
 pub fn calc_checksum<T>(curr_name: *const T, case_sensitive: bool) -> u32
 where
@@ -119,13 +114,14 @@ pub struct ModuleHandle {
     pub handle: HMODULE,
     pub use_load: bool,
 }
+#[allow(unused_assignments)]
 #[cfg(target_arch = "x86_64")]
 unsafe fn get_peb() -> *mut windows::Win32::System::Threading::PEB {
     let mut peb: *mut windows::Win32::System::Threading::PEB = null_mut();
     asm!("mov {}, gs:[0x60]", out(reg) peb);
     peb
 }
-
+#[allow(unused_assignments)]
 #[cfg(target_arch = "x86")]
 unsafe fn get_peb() -> *mut windows::Win32::System::Threading::PEB {
     let mut peb: *mut windows::Win32::System::Threading::PEB = null_mut();
@@ -182,13 +178,16 @@ fn get_module_by_checksum(checksum: u32) -> Option<HMODULE> {
     None
 }
 
-pub fn my_load_library(library_name: *const u8) -> Option<ModuleHandle> {
+pub fn my_load_library(library_name: *const u8, load: bool) -> Option<ModuleHandle> {
     if let Some(handle) = get_module_by_checksum(calc_checksum(library_name, false)) {
         Some(ModuleHandle{
             handle,
             use_load: false,
         })
     } else {
+        if !load {
+            return None
+        }
         unsafe {
             if let Some(func) = GLOBAL_IAT.MyLoadLibraryA {
                 let handle = func(PCSTR::from_raw(library_name));
@@ -206,9 +205,10 @@ pub fn my_load_library(library_name: *const u8) -> Option<ModuleHandle> {
         }
     }
 }
-
+#[allow(non_camel_case_types)]
 #[cfg(target_arch = "x86_64")]
 pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS64;
+#[allow(non_camel_case_types)]
 #[cfg(target_arch = "x86")]
 pub type IMAGE_NT_HEADER = windows::Win32::System::Diagnostics::Debug::IMAGE_NT_HEADERS32;
 
