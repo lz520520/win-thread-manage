@@ -79,6 +79,12 @@ impl MemAllocator {
     pub fn del_thread(&self, plugin_address: usize) {
         self.thread_cache_map.write().unwrap().remove(&plugin_address);
     }
+    pub fn del_thread_value(&self, plugin_address: usize, tid: usize) {
+        let mut map = self.thread_cache_map.write().unwrap();
+        map.entry(plugin_address).and_modify(|v| {
+            v.remove(&tid);
+        });
+    }
     pub fn get_thread(&self, plugin_address: usize) -> Option<HashSet<usize>> {
         self.thread_cache_map.read().unwrap().get(&plugin_address).cloned()
     }

@@ -1,7 +1,13 @@
-use windows::Win32::System::Diagnostics::ToolHelp::TH32CS_SNAPTHREAD;
-use windows::Win32::System::Memory::{MEM_COMMIT, MEM_RESERVE};
+use std::thread;
+use std::time::Duration;
+use win_thread_manage::initialize_hooks;
 
 fn main() {
-    println!("{}",MEM_COMMIT.0 & (MEM_RESERVE.0) > 0);
+    initialize_hooks();
+    thread::spawn(||{
+        println!("Thread started");
+        thread::sleep(Duration::from_secs(1));
+    });
+    thread::sleep(Duration::from_secs(20));
     // get_current_thread_frames();
 }

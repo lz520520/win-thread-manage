@@ -9,7 +9,7 @@ use windows::core::BOOL;
 use windows::Win32::Foundation::{FALSE, HANDLE};
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 use windows::Win32::System::Memory::{PAGE_PROTECTION_FLAGS, PAGE_READWRITE, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE};
-use windows::Win32::System::Threading::{GetCurrentThreadId, GetThreadId, LPTHREAD_START_ROUTINE, THREAD_CREATION_FLAGS};
+use windows::Win32::System::Threading::{ GetCurrentThreadId, GetThreadId, LPTHREAD_START_ROUTINE, THREAD_CREATION_FLAGS};
 use crate::alloc;
 use crate::alloc::{AllocInfo, MemInfo};
 use crate::thread::module::get_memory;
@@ -40,6 +40,10 @@ static  ORIGINAL_VIRTUAL_FREE: Lazy<Mutex<Option<unsafe extern "system" fn(
     dwsize : usize,
     dwfreetype : VIRTUAL_FREE_TYPE
 ) -> BOOL>>> = Lazy::new(|| Mutex::new(None));
+
+static  ORIGINAL_EXIT_THREAD: Lazy<Mutex<Option<unsafe extern "system" fn(
+    dwexitcode: u32
+)>>> = Lazy::new(|| Mutex::new(None));
 
 
 static  ORIGINAL_VIRTUAL_PROTECT: Lazy<Mutex<Option<unsafe extern "system" fn(
@@ -229,9 +233,42 @@ unsafe extern "system" fn MyCreateThread(lpthreadattributes : *const SECURITY_AT
 
         }
     }
+    // println!("Create thread");
     handle
 }
 
+#[allow(non_snake_case, unused_variables)]
+unsafe extern "stdcall" fn MyExitThread(dwexitcode: u32) {
+    // println!("Exiting thread {}", dwexitcode);
+    let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
+    if !mems.is_empty() {
+        match stackback(64) {
+            Ok(thread_frames) => {
+                for mem in mems {
+                    if thread_frames.iter().any(|frame| {
+                        if frame.addr >= mem.mem_base && frame.addr < mem.mem_base + mem.mem_size {
+                            let tid = GetCurrentThreadId();
+                            alloc::MEM_ALLOC_CACHE.del_thread_value(mem.mem_base, tid as usize);
+                            true
+                        } else {
+                            false
+                        }
+                    }) {
+                        break
+                    }
+                }
+            }
+            Err(_err) => {
+                // println!("Error getting current thread frames ({:?})", err);
+            }
+        }
+    }
+    let origin = ORIGINAL_EXIT_THREAD.lock().unwrap().clone();
+    if let Some(original) = origin {
+        original(dwexitcode)
+    }
+
+}
 
 
 #[allow(non_snake_case, unused_variables)]
@@ -240,13 +277,6 @@ unsafe extern "system" fn MyVirtualFree(
     dwsize : usize,
     dwfreetype : VIRTUAL_FREE_TYPE
 ) -> BOOL {
-    let origin = ORIGINAL_VIRTUAL_FREE.lock().unwrap().clone();
-    let status =  if let Some(original) = origin {
-        original(lpaddress, dwsize, dwfreetype)
-    } else {
-        FALSE
-    };
-
     let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
     if !mems.is_empty() {
         match stackback(64) {
@@ -270,8 +300,16 @@ unsafe extern "system" fn MyVirtualFree(
         }
 
     }
+    let origin = ORIGINAL_VIRTUAL_FREE.lock().unwrap().clone();
+    let status =  if let Some(original) = origin {
+        original(lpaddress, dwsize, dwfreetype)
+    } else {
+        FALSE
+    };
     status
 }
+
+
 #[allow(non_snake_case, unused_variables)]
 extern "stdcall" fn MyExitProcess(uExitCode: UINT) {
     // println!("hook exit");
@@ -342,6 +380,16 @@ pub fn hooks(){
         )
             .unwrap();
         *ORIGINAL_CREATE_THREAD.lock().unwrap() = Some(std::mem::transmute(origin));
+
+        let proc = dll.get_fn(obfstr::obfstr!("ExitThread")).unwrap();
+        let _ = MinHook::remove_hook(mem::transmute(proc));
+        let origin = MinHook::create_hook_api(
+            obfstr::obfstr!("Kernel32.dll"),
+            obfstr::obfstr!("ExitThread"),
+            MyExitThread as _,
+        )
+            .unwrap();
+        *ORIGINAL_EXIT_THREAD.lock().unwrap() = Some(std::mem::transmute(origin));
 
         let proc = dll.get_fn(obfstr::obfstr!("VirtualFree")).unwrap();
         let _ = MinHook::remove_hook(mem::transmute(proc));
