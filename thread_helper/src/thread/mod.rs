@@ -1,7 +1,11 @@
-pub mod stack;
+mod capture_stack;
 pub mod module;
+mod simple_stack;
+pub mod stack;
 
 use std::collections::HashSet;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
 use windows::core::BOOL;
 use windows::Win32::Foundation::{FALSE, HANDLE};
 use windows::Win32::System::Memory::{ MEMORY_BASIC_INFORMATION, MEM_COMMIT,  MEM_RELEASE, MEM_RESERVE, VIRTUAL_FREE_TYPE};
@@ -9,6 +13,20 @@ use windows::Win32::System::Threading::{ THREAD_ACCESS_RIGHTS, THREAD_QUERY_INFO
 use crate::{get_dll_fn, new_dll};
 use crate::alloc;
 use crate::dll_helper::CommonResult;
+
+
+#[derive(Default)]
+pub struct FrameInfo {
+    pub addr: usize,
+    pub module_name: String,
+    pub offset: usize,
+}
+static FRAME_METHOD: Lazy<Mutex<u8>> = Lazy::new(|| {Mutex::new(0)});
+
+pub fn set_frame_method(method: u8) {
+    *FRAME_METHOD.lock().unwrap() = method;
+
+}
 
 fn is_valid_address(address: *const std::ffi::c_void,
                     fn_virtual_query: unsafe extern "system" fn(lpaddress : *const core::ffi::c_void, lpbuffer : *mut MEMORY_BASIC_INFORMATION, dwlength : usize) -> usize) -> bool{

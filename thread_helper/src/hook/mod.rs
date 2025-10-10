@@ -13,7 +13,7 @@ use windows::Win32::System::Threading::{ GetCurrentThreadId, GetThreadId, LPTHRE
 use crate::alloc;
 use crate::alloc::{AllocInfo, MemInfo};
 use crate::thread::module::get_memory;
-use crate::thread::stack::{stackback};
+use crate::thread::stack::{get_thread_frames};
 
 
 static  ORIGINAL_VIRTUAL_ALLOC: Lazy<Mutex<Option<unsafe extern "system" fn(
@@ -110,7 +110,7 @@ unsafe extern "system" fn MyVirtualAlloc(
         } else {
             let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
             if !mems.is_empty() {
-                if let Ok(frames) = stackback(64) {
+                if let Ok(frames) = get_thread_frames() {
                     for mem in mems {
 
                         if frames.iter().any(|frame| {
@@ -205,7 +205,7 @@ unsafe extern "system" fn MyCreateThread(lpthreadattributes : *const SECURITY_AT
     if !handle.is_invalid() {
         let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
         if !mems.is_empty() {
-            match stackback(64) {
+            match get_thread_frames() {
                 Ok(thread_frames) => {
 
                     for mem in mems {
@@ -242,7 +242,7 @@ unsafe extern "stdcall" fn MyExitThread(dwexitcode: u32) {
     // println!("Exiting thread {}", dwexitcode);
     let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
     if !mems.is_empty() {
-        match stackback(64) {
+        match get_thread_frames() {
             Ok(thread_frames) => {
                 for mem in mems {
                     if thread_frames.iter().any(|frame| {
@@ -279,7 +279,7 @@ unsafe extern "system" fn MyVirtualFree(
 ) -> BOOL {
     let mems:  Vec<MemInfo> = alloc::MEM_ALLOC_CACHE.all_mem_values();
     if !mems.is_empty() {
-        match stackback(64) {
+        match get_thread_frames() {
             Ok(thread_frames) => {
                 for mem in mems {
                     if thread_frames.iter().any(|frame| {
